@@ -55,15 +55,13 @@ fn erf(x: f64) -> f64 {
 	(2. / PI) * k
 }
 
-fn normal_density(x: f64, mean: f64, variance: f64) -> f64 {
-	let std_deviation = variance.sqrt();
+fn normal_density(x: f64, mean: f64, std_deviation: f64) -> f64 {
 	let a = (x - mean) / std_deviation;
 	let b = std_deviation * (2. * PI).sqrt();
 	(-0.5 * a * a).exp() / b
 }
 
-fn normal_cdf(x: f64, mean: f64, variance: f64) -> f64 {
-	let std_deviation = variance.sqrt();
+fn normal_cdf(x: f64, mean: f64, std_deviation: f64) -> f64 {
 	let integral_constant = -(PI / 2.).sqrt() * std_deviation;
 	let F_x = integral_constant * erf((mean - x) / 2_f64.sqrt() * std_deviation);
 	let F_minus_inf = integral_constant * 1.; // `1` is the limit of erf(x) for x -> +inf
@@ -71,11 +69,26 @@ fn normal_cdf(x: f64, mean: f64, variance: f64) -> f64 {
 	(F_x - F_minus_inf) / b
 }
 
-fn expected_improvement(mean: f64, variance: f64, max_sample: f64) -> f64 {
-	let delta = mean - max_sample;
-	let density = normal_density(delta / variance, mean, variance);
-	let cumulative_density = normal_cdf(delta / variance, mean, variance);
-	maxf(delta, 0.) + variance * density - delta.abs() * cumulative_density
+// TODO Use vectors
+fn expected_improvement(mean: Vector::<f64>, std_deviation: Vector::<f64>,
+	max_sample: Vector::<f64>) -> Vector::<f64> {
+	let mut v = Vector::<f64>::new(mean.get_size());
+
+	for i in 0..v.get_size() {
+		let delta = mean.get(i) - max_sample.get(i);
+		let density = normal_density(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
+		let cumulative_density = normal_cdf(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
+		*v.get_mut(i) = maxf(delta, 0.) + std_deviation.get(i) * density - delta.abs() * cumulative_density
+	}
+
+	v
+}
+
+fn get_next_eval_point(mean: Vector::<f64>, _std_deviation: Vector::<f64>,
+	_max_sample: Vector::<f64>) -> Vector::<f64> {
+	// TODO
+
+	Vector::<f64>::new(mean.get_size())
 }
 
 fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize, n: usize)
