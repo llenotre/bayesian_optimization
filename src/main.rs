@@ -1,5 +1,7 @@
 use leonhard::linear_algebra::*;
 
+use std::f64::consts::PI;
+
 static mut RAND: u64 = 42;
 
 fn pseudo_rand() -> f64 {
@@ -22,6 +24,60 @@ fn rand_vector(size: usize, amplitude: f64) -> Vector<f64> {
 	Vector::<f64>::from_vec(vec)
 }
 
+fn maxf(a: f64, b:  f64) -> f64 {
+	if a > b {
+		a
+	} else {
+		b
+	}
+}
+
+fn erf(x: f64) -> f64 {
+	let iter_count = 10;
+	let mut k = 0.;
+	let mut fact = 1;
+
+	// Computing using a Mauclin serie
+	for n in 0..iter_count {
+		if n > 1 {
+			fact *= n;
+		}
+
+		let sign = if n % 2 == 0 {
+			1.
+		} else {
+			-1.
+		};
+		let a = 2 * n - 1;
+		k += (sign * x.powf(a as _)) / (fact * a) as f64;
+	}
+
+	(2. / PI) * k
+}
+
+fn normal_density(x: f64, mean: f64, variance: f64) -> f64 {
+	let std_deviation = variance.sqrt();
+	let a = (x - mean) / std_deviation;
+	let b = std_deviation * (2. * PI).sqrt();
+	(-0.5 * a * a).exp() / b
+}
+
+fn normal_cdf(x: f64, mean: f64, variance: f64) -> f64 {
+	let std_deviation = variance.sqrt();
+	let integral_constant = -(PI / 2.).sqrt() * std_deviation;
+	let F_x = integral_constant * erf((mean - x) / 2_f64.sqrt() * std_deviation);
+	let F_minus_inf = integral_constant * 1.; // `1` is the limit of erf(x) for x -> +inf
+	let b = std_deviation * (2. * PI).sqrt();
+	(F_x - F_minus_inf) / b
+}
+
+fn expected_improvement(mean: f64, variance: f64, max_sample: f64) -> f64 {
+	let delta = mean - max_sample;
+	let density = normal_density(delta / variance, mean, variance);
+	let cumulative_density = normal_cdf(delta / variance, mean, variance);
+	maxf(delta, 0.) + variance * density - delta.abs() * cumulative_density
+}
+
 fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize, n: usize)
 	-> Vector<f64> {
 	assert!(n_0 > 0);
@@ -35,7 +91,7 @@ fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize
 	}
 	for _ in n_0..n {
 		// TODO Update the posterior probability distribution on f using all available data
-		// TODO Let x[n] be a maximizer of the acquisition function over x, where the acquisition function is computed using the cuurrent posterior distribution
+		// TODO Let x[n] be a maximizer of the acquisition function over x, where the acquisition function is computed using the current posterior distribution
 		let x = Vector::<f64>::from_vec(vec!{ 0. }); // TODO
 		data.push((x.clone(), f(x)));
 	}
