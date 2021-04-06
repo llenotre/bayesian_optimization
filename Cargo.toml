@@ -9,4 +9,4 @@ edition = "2018"
 [dependencies]
 
 [dependencies.leonhard]
-git = "https://gitlab.com/screwdriver_/leonhard"
+git = "https://github.com/llenotre/leonhard"

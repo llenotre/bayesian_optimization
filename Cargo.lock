@@ -12,4 +12,4 @@ dependencies = [
 [[package]]
 name = "leonhard"
 version = "0.1.0"
-source = "git+https://gitlab.com/screwdriver_/leonhard#0dae52d0266ae82a461954dbeeb31681e539957d"
+source = "git+https://github.com/llenotre/leonhard#2a19711cffcb365bb22e4cfe08cef3789d643b9d"

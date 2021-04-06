@@ -55,6 +55,34 @@ fn gaussian_kernel(a: Vector::<f64>, b: Vector::<f64>) -> f64 {
 	alpha * (-(a - b).length_squared()).exp()
 }
 
+/*fn build_covariance_matrix(x: Vector::<f64>, values: Matrix::<f64>) -> Matrix::<f64> {
+	// TODO
+}*/
+
+fn build_covariance_matrix_symetric(values: Vector::<f64>) -> Matrix::<f64> {
+	let size = values.get_size();
+	let mut m = Matrix::new(size, size);
+
+	for i in 0..size {
+		for j in i..size {
+			let val = gaussian_kernel(From::from(*values.get(i)), From::from(*values.get(j)));
+			*m.get_mut(i, j) = val;
+			if i != j {
+				*m.get_mut(j, i) = val;
+			}
+		}
+	}
+	m
+}
+
+/*fn compute_mean() -> Vector::<f64> {
+	// TODO
+}
+
+fn compute_std_deviation() -> Vector::<f64> {
+	// TODO
+}*/
+
 fn normal_density(x: f64, mean: f64, std_deviation: f64) -> f64 {
 	let a = (x - mean) / std_deviation;
 	let b = std_deviation * (2. * PI).sqrt();
