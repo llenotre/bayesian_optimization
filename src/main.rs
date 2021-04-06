@@ -33,26 +33,26 @@ fn maxf(a: f64, b:  f64) -> f64 {
 }
 
 fn erf(x: f64) -> f64 {
-	let iter_count = 10;
-	let mut k = 0.;
-	let mut fact = 1;
-
-	// Computing using a Mauclin serie
-	for n in 0..iter_count {
-		if n > 1 {
-			fact *= n;
-		}
-
-		let sign = if n % 2 == 0 {
-			1.
-		} else {
-			-1.
-		};
-		let a = 2 * n - 1;
-		k += (sign * x.powf(a as _)) / (fact * a) as f64;
+	if x >= 3. {
+		return 1.;
+	} else if x <= -3. {
+		return -1.;
 	}
 
-	(2. / PI) * k
+	let mut r0 = 0.;
+	for n in 0..100 {
+		let mut r1 = 1.;
+		for k in 1..=n {
+			r1 *= -(x * x) / (k as f64);
+		}
+		r0 += (x / (2 * n + 1) as f64) * r1;
+	}
+	(2. / PI.sqrt()) * r0
+}
+
+fn gaussian_kernel(a: Vector::<f64>, b: Vector::<f64>) -> f64 {
+	let alpha = 1.; // TODO
+	alpha * (-(a - b).length_squared()).exp()
 }
 
 fn normal_density(x: f64, mean: f64, std_deviation: f64) -> f64 {
@@ -69,7 +69,6 @@ fn normal_cdf(x: f64, mean: f64, std_deviation: f64) -> f64 {
 	(F_x - F_minus_inf) / b
 }
 
-// TODO Use vectors
 fn expected_improvement(mean: Vector::<f64>, std_deviation: Vector::<f64>,
 	max_sample: Vector::<f64>) -> Vector::<f64> {
 	let mut v = Vector::<f64>::new(mean.get_size());
