@@ -4,6 +4,11 @@ use std::f64::consts::PI;
 
 static mut RAND: u64 = 42;
 
+struct Sample {
+	x: Vector::<f64>,
+	y: f64,
+}
+
 fn pseudo_rand() -> f64 {
 	let a: u64 = 25214903917;
 	let c: u64 = 11;
@@ -55,17 +60,16 @@ fn gaussian_kernel(a: Vector::<f64>, b: Vector::<f64>) -> f64 {
 	alpha * (-(a - b).length_squared()).exp()
 }
 
-/*fn build_covariance_matrix(x: Vector::<f64>, values: Matrix::<f64>) -> Matrix::<f64> {
-	// TODO
-}*/
+// TODO gaussian_kernel gradient
 
-fn build_covariance_matrix_symetric(values: Vector::<f64>) -> Matrix::<f64> {
-	let size = values.get_size();
+fn build_covariance_matrix(x: Vector::<f64>, y: Vector::<f64>) -> Matrix::<f64> {
+	assert!(x.get_size() == y.get_size());
+	let size = x.get_size();
 	let mut m = Matrix::new(size, size);
 
 	for i in 0..size {
 		for j in i..size {
-			let val = gaussian_kernel(From::from(*values.get(i)), From::from(*values.get(j)));
+			let val = gaussian_kernel(From::from(*x.get(i)), From::from(*y.get(j)));
 			*m.get_mut(i, j) = val;
 			if i != j {
 				*m.get_mut(j, i) = val;
@@ -74,14 +78,6 @@ fn build_covariance_matrix_symetric(values: Vector::<f64>) -> Matrix::<f64> {
 	}
 	m
 }
-
-/*fn compute_mean() -> Vector::<f64> {
-	// TODO
-}
-
-fn compute_std_deviation() -> Vector::<f64> {
-	// TODO
-}*/
 
 fn normal_density(x: f64, mean: f64, std_deviation: f64) -> f64 {
 	let a = (x - mean) / std_deviation;
@@ -97,12 +93,53 @@ fn normal_cdf(x: f64, mean: f64, std_deviation: f64) -> f64 {
 	(F_x - F_minus_inf) / b
 }
 
-fn expected_improvement(mean: Vector::<f64>, std_deviation: Vector::<f64>,
-	max_sample: Vector::<f64>) -> Vector::<f64> {
+fn data_x_to_vec(data: &Vec<Sample>) -> Vector::<f64> {
+	// TODO
+	Vector::<f64>::new(0)
+}
+
+fn data_y_to_vec(data: &Vec<Sample>) -> Vector::<f64> {
+	let len = data.len();
+	let mut v = Vector::new(len);
+
+	for i in 0..len {
+		v[i] = data[i].y;
+	}
+	v
+}
+
+fn compute_mean(data: &Vec<Sample>, x: Vector::<f64>) -> Vector::<f64> {
+	let data_x = data_x_to_vec(data);
+	let data_y = data_y_to_vec(data);
+
+	let a = build_covariance_matrix(x.clone(), data_x.clone());
+	let b = build_covariance_matrix(data_x.clone(), data_x).get_inverse();
+	let c = data_y;
+	a * (b * c)
+}
+
+fn compute_std_deviation(data: &Vec<Sample>, x: Vector::<f64>) -> Vector::<f64> {
+	let data_x = data_x_to_vec(data);
+
+	let a = build_covariance_matrix(x.clone(), x.clone());
+	let b = build_covariance_matrix(x.clone(), data_x.clone());
+	let c = build_covariance_matrix(data_x.clone(), data_x.clone()).get_inverse();
+	let d = build_covariance_matrix(data_x, x);
+	(a - (b * (c * d))).to_vector() // TODO sqrt
+}
+
+fn bfgs<A: Fn(Vector::<f64>) -> f64, B: Fn(Vector::<f64>) -> Vector::<f64>>(func: A, gradient: B)
+	-> Vector::<f64> {
+	// TODO
+	Vector::new(0)
+}
+
+fn expected_improvement(mean: Vector::<f64>, std_deviation: Vector::<f64>, max_sample: f64)
+	-> Vector::<f64> {
 	let mut v = Vector::<f64>::new(mean.get_size());
 
 	for i in 0..v.get_size() {
-		let delta = mean.get(i) - max_sample.get(i);
+		let delta = mean.get(i) - max_sample;
 		let density = normal_density(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
 		let cumulative_density = normal_cdf(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
 		*v.get_mut(i) = maxf(delta, 0.) + std_deviation.get(i) * density - delta.abs() * cumulative_density
@@ -111,40 +148,49 @@ fn expected_improvement(mean: Vector::<f64>, std_deviation: Vector::<f64>,
 	v
 }
 
-fn get_next_eval_point(mean: Vector::<f64>, _std_deviation: Vector::<f64>,
-	_max_sample: Vector::<f64>) -> Vector::<f64> {
-	// TODO
-
-	Vector::<f64>::new(mean.get_size())
-}
+// TODO expected_improvement_gradient
 
 fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize, n: usize)
 	-> Vector<f64> {
 	assert!(n_0 > 0);
 	assert!(n_0 <= n);
 
-	let mut data = Vec::<(Vector::<f64>, f64)>::new();
+	let mut data = Vec::<Sample>::new();
 
 	for _ in 0..n_0 {
 		let x = rand_vector(dim, 100.);
-		data.push((x.clone(), f(x)));
+		data.push(Sample {
+			x: x.clone(),
+			y: f(x)
+		});
 	}
 	for _ in n_0..n {
-		// TODO Update the posterior probability distribution on f using all available data
-		// TODO Let x[n] be a maximizer of the acquisition function over x, where the acquisition function is computed using the current posterior distribution
-		let x = Vector::<f64>::from_vec(vec!{ 0. }); // TODO
-		data.push((x.clone(), f(x)));
+		let max_sample = 0.; // TODO
+
+		let x = bfgs(| x | {
+			let mean = compute_mean(&data, x.clone());
+			let std_deviation = compute_std_deviation(&data, x);
+			expected_improvement(mean, std_deviation, max_sample).length()
+		}, | x | {
+			// TODO
+			Vector::<f64>::new(0)
+		});
+
+		data.push(Sample {
+			x: x.clone(),
+			y: f(x)
+		});
 	}
 
 	let mut max_index = 0;
 	for i in 0..data.len() {
-		println!("{} {}", data[i].0, data[i].1);
-		if data[i].1 > data[max_index].1 {
+		println!("{} {}", data[i].x, data[i].y);
+		if data[i].y > data[max_index].y {
 			max_index = i;
 		}
 	}
 
-	data[max_index].0.clone()
+	data[max_index].x.clone()
 }
 
 fn main() {
