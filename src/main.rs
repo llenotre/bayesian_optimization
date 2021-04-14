@@ -1,6 +1,10 @@
+use std::f64::consts::PI;
+
 use leonhard::linear_algebra::*;
 
-use std::f64::consts::PI;
+use bfgs::bfgs;
+
+mod bfgs;
 
 static mut RAND: u64 = 42;
 
@@ -128,12 +132,6 @@ fn compute_std_deviation(data: &Vec<Sample>, x: Vector::<f64>) -> Vector::<f64> 
 	(a - (b * (c * d))).to_vector() // TODO sqrt
 }
 
-fn bfgs<A: Fn(Vector::<f64>) -> f64, B: Fn(Vector::<f64>) -> Vector::<f64>>(func: A, gradient: B)
-	-> Vector::<f64> {
-	// TODO
-	Vector::new(0)
-}
-
 fn expected_improvement(mean: Vector::<f64>, std_deviation: Vector::<f64>, max_sample: f64)
 	-> Vector::<f64> {
 	let mut v = Vector::<f64>::new(mean.get_size());
@@ -166,15 +164,16 @@ fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize
 	}
 	for _ in n_0..n {
 		let max_sample = 0.; // TODO
+		let start = Vector::<f64>::new(0); // TODO
 
-		let x = bfgs(| x | {
+		let x = bfgs(start, | x | {
 			let mean = compute_mean(&data, x.clone());
 			let std_deviation = compute_std_deviation(&data, x);
 			expected_improvement(mean, std_deviation, max_sample).length()
 		}, | x | {
 			// TODO
 			Vector::<f64>::new(0)
-		});
+		}, 1024);
 
 		data.push(Sample {
 			x: x.clone(),
