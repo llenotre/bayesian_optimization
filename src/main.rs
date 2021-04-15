@@ -5,58 +5,11 @@ use leonhard::linear_algebra::*;
 use bfgs::bfgs;
 
 mod bfgs;
-
-static mut RAND: u64 = 42;
+mod util;
 
 struct Sample {
 	x: Vector::<f64>,
 	y: f64,
-}
-
-fn pseudo_rand() -> f64 {
-	let a: u64 = 25214903917;
-	let c: u64 = 11;
-	let m: u64 = 1 << 45;
-
-	unsafe {
-		let x = (a.wrapping_mul(RAND).wrapping_add(c)) % m;
-		RAND = x;
-		(x as f64) / (m as f64)
-	}
-}
-
-fn rand_vector(size: usize, amplitude: f64) -> Vector<f64> {
-	let mut vec = Vec::<f64>::new();
-	for _ in 0..size {
-		vec.push((pseudo_rand() - 0.5) * (amplitude * 2.));
-	}
-	Vector::<f64>::from_vec(vec)
-}
-
-fn maxf(a: f64, b:  f64) -> f64 {
-	if a > b {
-		a
-	} else {
-		b
-	}
-}
-
-fn erf(x: f64) -> f64 {
-	if x >= 3. {
-		return 1.;
-	} else if x <= -3. {
-		return -1.;
-	}
-
-	let mut r0 = 0.;
-	for n in 0..100 {
-		let mut r1 = 1.;
-		for k in 1..=n {
-			r1 *= -(x * x) / (k as f64);
-		}
-		r0 += (x / (2 * n + 1) as f64) * r1;
-	}
-	(2. / PI.sqrt()) * r0
 }
 
 fn gaussian_kernel(a: Vector::<f64>, b: Vector::<f64>) -> f64 {
@@ -91,7 +44,7 @@ fn normal_density(x: f64, mean: f64, std_deviation: f64) -> f64 {
 
 fn normal_cdf(x: f64, mean: f64, std_deviation: f64) -> f64 {
 	let integral_constant = -(PI / 2.).sqrt() * std_deviation;
-	let F_x = integral_constant * erf((mean - x) / 2_f64.sqrt() * std_deviation);
+	let F_x = integral_constant * util::erf((mean - x) / 2_f64.sqrt() * std_deviation);
 	let F_minus_inf = integral_constant * 1.; // `1` is the limit of erf(x) for x -> +inf
 	let b = std_deviation * (2. * PI).sqrt();
 	(F_x - F_minus_inf) / b
@@ -140,7 +93,7 @@ fn expected_improvement(mean: Vector::<f64>, std_deviation: Vector::<f64>, max_s
 		let delta = mean.get(i) - max_sample;
 		let density = normal_density(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
 		let cumulative_density = normal_cdf(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
-		*v.get_mut(i) = maxf(delta, 0.) + std_deviation.get(i) * density - delta.abs() * cumulative_density
+		*v.get_mut(i) = util::maxf(delta, 0.) + std_deviation.get(i) * density - delta.abs() * cumulative_density
 	}
 
 	v
@@ -156,7 +109,7 @@ fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize
 	let mut data = Vec::<Sample>::new();
 
 	for _ in 0..n_0 {
-		let x = rand_vector(dim, 100.);
+		let x = util::rand_vector(dim, 100.);
 		data.push(Sample {
 			x: x.clone(),
 			y: f(x)
