@@ -12,4 +12,4 @@ dependencies = [
 [[package]]
 name = "leonhard"
 version = "0.1.0"
-source = "git+https://github.com/llenotre/leonhard#9000e3033d57a621a2f52d1d5d73a3ca8600b145"
+source = "git+https://github.com/llenotre/leonhard#30a0cef0a02df12b983cfee3a713bc1e17ff6e84"

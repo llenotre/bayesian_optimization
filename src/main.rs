@@ -88,14 +88,12 @@ fn compute_std_deviation(data: &Vec<Sample>, x: Vector::<f64>) -> Vector::<f64> 
 fn expected_improvement(mean: Vector::<f64>, std_deviation: Vector::<f64>, max_sample: f64)
 	-> Vector::<f64> {
 	let mut v = Vector::<f64>::new(mean.get_size());
-
 	for i in 0..v.get_size() {
 		let delta = mean.get(i) - max_sample;
 		let density = normal_density(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
 		let cumulative_density = normal_cdf(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
 		*v.get_mut(i) = util::maxf(delta, 0.) + std_deviation.get(i) * density - delta.abs() * cumulative_density
 	}
-
 	v
 }
 
@@ -146,9 +144,16 @@ fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize
 }
 
 fn main() {
-	let result = bayesian_optimization(| v | {
+	/*let result = bayesian_optimization(| v | {
 		let x = v.x();
 		((x - 10.) * x).sin() - ((x - 10.) * (x - 10.)) + 10.
-	}, 1, 10, 50);
+	}, 1, 10, 50);*/
+
+	let result = bfgs(Vector::<f64>::from_vec(vec!{10.}), | x | {
+		-x.x() * x.x()
+	}, | x | {
+		x * -2.
+	}, 1024);
+
 	println!("Result: {}", result);
 }

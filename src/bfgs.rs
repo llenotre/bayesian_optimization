@@ -1,15 +1,19 @@
 use leonhard::linear_algebra::*;
 
-fn line_search<A>(x: Vector::<f64>, direction: Vector::<f64>, func: A, mut a: f64, p: f64,
-	max_steps: usize) -> f64 where A: Fn(Vector::<f64>) -> f64 {
-	let start_y = func(x.clone());
+fn gradient_ascent<A>(mut x: Vector::<f64>, gradient: A, step_size: f64, max_steps: usize)
+	-> Vector::<f64> where A: Fn(Vector::<f64>) -> Vector::<f64> {
 	for _ in 0..max_steps {
-		if func(x.clone() + direction.clone() * a) - start_y >= a {
-			break;
-		}
-		a *= p;
+		println!("-> {}", x.clone());
+		x += gradient(x.clone()) * step_size;
 	}
-	a
+	x
+}
+
+fn line_search<A>(x: Vector::<f64>, direction: Vector::<f64>, gradient: A, max_steps: usize)
+	-> f64 where A: Fn(Vector::<f64>) -> Vector::<f64> {
+	*gradient_ascent(Vector::new(1), | a | {
+		gradient(x.clone() + a * direction.clone()) * direction.clone()
+	}, 0.01, 1024).x()
 }
 
 pub fn compute_new_inverse_hessian(curr_mat: Matrix::<f64>, s: Vector::<f64>, y: Vector::<f64>)
@@ -36,14 +40,22 @@ pub fn bfgs<A, B>(start: Vector::<f64>, func: A, gradient: B, max_steps: usize) 
 	let mut inverse_hessian_matrix = Matrix::identity(start.get_size());
 
 	for _ in 0..max_steps {
+		println!("x: {}", x.clone());
 		let direction = inverse_hessian_matrix.clone() * gradient(x.clone());
-		let alpha = line_search(x.clone(), direction.clone(), func, 10., 0.8, 1024);
+		println!("inverse_hessian_matrix: {}", inverse_hessian_matrix.clone());
+		println!("direction: {}", direction.clone());
+		let alpha = line_search(x.clone(), direction.clone(), gradient, 1024);
+		println!("alpha: {}", alpha);
 		let s = direction * alpha;
 		let x_next = x.clone() + s.clone();
-		let gradient_difference = gradient(x_next) - gradient(x.clone());
+		let gradient_difference = gradient(x_next.clone()) - gradient(x.clone());
+		x = x_next;
+		println!("gradient_difference: {}", gradient_difference);
 		inverse_hessian_matrix = compute_new_inverse_hessian(inverse_hessian_matrix, s,
 			gradient_difference);
+		println!("new inverse_hessian_matrix: {}", inverse_hessian_matrix.clone());
+		println!("------------------------------------------------------------------------");
 	}
 
-	Vector::new(0)
+	x
 }
