@@ -87,8 +87,9 @@ fn compute_std_deviation(data: &Vec<Sample>, x: Vector::<f64>) -> Vector::<f64> 
 
 fn expected_improvement(mean: Vector::<f64>, std_deviation: Vector::<f64>, max_sample: f64)
 	-> Vector::<f64> {
-	let mut v = Vector::<f64>::new(mean.get_size());
-	for i in 0..v.get_size() {
+	let dim = mean.get_size();
+	let mut v = Vector::<f64>::new(dim);
+	for i in 0..dim {
 		let delta = mean.get(i) - max_sample;
 		let density = normal_density(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
 		let cumulative_density = normal_cdf(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
@@ -97,7 +98,12 @@ fn expected_improvement(mean: Vector::<f64>, std_deviation: Vector::<f64>, max_s
 	v
 }
 
-// TODO expected_improvement_gradient
+fn expected_improvement_gradient(mean: Vector::<f64>, std_deviation: Vector::<f64>,
+	max_sample: f64) -> Vector::<f64> {
+	let dim = mean.get_size();
+	// TODO
+	Vector::new(dim)
+}
 
 fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize, n: usize)
 	-> Vector<f64> {
@@ -115,15 +121,16 @@ fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize
 	}
 	for _ in n_0..n {
 		let max_sample = 0.; // TODO
-		let start = Vector::<f64>::new(0); // TODO
+		let start = Vector::<f64>::new(dim); // TODO
 
 		let x = bfgs(start, | x | {
 			let mean = compute_mean(&data, x.clone());
 			let std_deviation = compute_std_deviation(&data, x);
 			expected_improvement(mean, std_deviation, max_sample).length()
 		}, | x | {
-			// TODO
-			Vector::<f64>::new(0)
+			let mean = compute_mean(&data, x.clone());
+			let std_deviation = compute_std_deviation(&data, x);
+			expected_improvement_gradient(mean, std_deviation, max_sample)
 		}, 1024);
 
 		data.push(Sample {
@@ -144,16 +151,16 @@ fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize
 }
 
 fn main() {
-	/*let result = bayesian_optimization(| v | {
+	let result = bayesian_optimization(| v | {
 		let x = v.x();
 		((x - 10.) * x).sin() - ((x - 10.) * (x - 10.)) + 10.
-	}, 1, 10, 50);*/
+	}, 1, 10, 50);
 
-	let result = bfgs(Vector::<f64>::from_vec(vec!{10.}), | x | {
-		-x.x() * x.x()
+	/*let result = bfgs(Vector::<f64>::from_vec(vec!{10.}), | x | {
+		x.x() * x.x() + x.x() * 2. + x.x().cos() * 80.
 	}, | x | {
-		x * -2.
-	}, 1024);
+		x.clone() * 2. + 2. - 80. * x.x().sin()
+	}, 1024);*/
 
 	println!("Result: {}", result);
 }
