@@ -14,25 +14,25 @@ struct Sample {
 
 fn gaussian_kernel(a: Vector::<f64>, b: Vector::<f64>) -> f64 {
 	let alpha = 1.; // TODO
-	alpha * (-(a - b).length_squared()).exp()
+	alpha * (-((a - b).length_squared())).exp()
 }
 
 // TODO gaussian_kernel gradient
 
-fn build_covariance_matrix(x: Vector::<f64>, y: Vector::<f64>) -> Matrix::<f64> {
-	assert!(x.get_size() == y.get_size());
-	let size = x.get_size();
-	let mut m = Matrix::new(size, size);
+fn build_covariance_matrix<F0: Fn(usize) -> Vector::<f64>, F1: Fn(usize) -> Vector::<f64>>(y: F0,
+	height: usize, x: F1, width: usize) -> Matrix::<f64> {
+	let mut m = Matrix::<f64>::new(height, width);
 
-	for i in 0..size {
-		for j in i..size {
-			let val = gaussian_kernel(From::from(*x.get(i)), From::from(*y.get(j)));
+	for i in 0..height {
+		for j in 0..width {
+			let val = gaussian_kernel(y(i), x(j));
 			*m.get_mut(i, j) = val;
-			if i != j {
+			if j < height && i < width {
 				*m.get_mut(j, i) = val;
 			}
 		}
 	}
+
 	m
 }
 
@@ -50,15 +50,9 @@ fn normal_cdf(x: f64, mean: f64, std_deviation: f64) -> f64 {
 	(F_x - F_minus_inf) / b
 }
 
-fn data_x_to_vec(data: &Vec<Sample>) -> Vector::<f64> {
-	// TODO
-	Vector::<f64>::new(0)
-}
-
 fn data_y_to_vec(data: &Vec<Sample>) -> Vector::<f64> {
 	let len = data.len();
 	let mut v = Vector::new(len);
-
 	for i in 0..len {
 		v[i] = data[i].y;
 	}
@@ -66,23 +60,49 @@ fn data_y_to_vec(data: &Vec<Sample>) -> Vector::<f64> {
 }
 
 fn compute_mean(data: &Vec<Sample>, x: Vector::<f64>) -> Vector::<f64> {
-	let data_x = data_x_to_vec(data);
-	let data_y = data_y_to_vec(data);
-
-	let a = build_covariance_matrix(x.clone(), data_x.clone());
-	let b = build_covariance_matrix(data_x.clone(), data_x).get_inverse();
-	let c = data_y;
+	let a = build_covariance_matrix(| _ | {
+		x.clone()
+	}, 1, | i | {
+		data[i].x.clone()
+	}, data.len());
+	let b = build_covariance_matrix(| i | {
+		data[i].x.clone()
+	}, data.len(), | i | {
+		data[i].x.clone()
+	}, data.len()).get_inverse();
+	let c = data_y_to_vec(data);
+	//println!("m: {} * ({} * {}) = {}", a.clone(), b.clone(), c.clone(), a.clone() * (b.clone() * c.clone()));
 	a * (b * c)
 }
 
 fn compute_std_deviation(data: &Vec<Sample>, x: Vector::<f64>) -> Vector::<f64> {
-	let data_x = data_x_to_vec(data);
+	let a = build_covariance_matrix(| _ | {
+		x.clone()
+	}, 1, | _ | {
+		x.clone()
+	}, 1);
+	let b = build_covariance_matrix(| _ | {
+		x.clone()
+	}, 1, | i | {
+		data[i].x.clone()
+	}, data.len());
+	let c = build_covariance_matrix(| i | {
+		data[i].x.clone()
+	}, data.len(), | i | {
+		data[i].x.clone()
+	}, data.len()).get_inverse();
+	let d = build_covariance_matrix(| i | {
+		data[i].x.clone()
+	}, data.len(), | _ | {
+		x.clone()
+	}, 1);
 
-	let a = build_covariance_matrix(x.clone(), x.clone());
-	let b = build_covariance_matrix(x.clone(), data_x.clone());
-	let c = build_covariance_matrix(data_x.clone(), data_x.clone()).get_inverse();
-	let d = build_covariance_matrix(data_x, x);
-	(a - (b * (c * d))).to_vector() // TODO sqrt
+	let mut result = (a.clone() - (b.clone() * (c.clone() * d.clone()))).to_vector();
+	result.for_each(| v, _ | {
+		v.sqrt()
+	});
+	//println!("s: sqrt({} - ({} * ({} * {}))) = {}", a, b, c, d, result);
+	result
 }
 
 fn expected_improvement(mean: Vector::<f64>, std_deviation: Vector::<f64>, max_sample: f64)
@@ -93,7 +113,8 @@ fn expected_improvement(mean: Vector::<f64>, std_deviation: Vector::<f64>, max_s
 		let delta = mean.get(i) - max_sample;
 		let density = normal_density(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
 		let cumulative_density = normal_cdf(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
-		*v.get_mut(i) = util::maxf(delta, 0.) + std_deviation.get(i) * density - delta.abs() * cumulative_density
+		*v.get_mut(i) = util::maxf(delta, 0.) + std_deviation.get(i) * density - delta.abs() * cumulative_density;
+		println!("max({}, 0) + {} * {} - |{}| * {} = {}", delta, std_deviation.get(i), density, delta, cumulative_density, *v.get(i));
 	}
 	v
 }
@@ -111,6 +132,7 @@ fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize
 	assert!(n_0 <= n);
 
 	let mut data = Vec::<Sample>::new();
+	let mut max_index = 0;
 
 	for _ in 0..n_0 {
 		let x = util::rand_vector(dim, 100.);
@@ -118,8 +140,22 @@ fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize
 			x: x.clone(),
 			y: f(x)
 		});
+		//println!("{}, {}", data[data.len() - 1].x, data[data.len() - 1].y);
+		if data[data.len() - 1].y > data[max_index].y {
+			max_index = data.len() - 1;
+		}
 	}
-	for _ in n_0..n {
+
+	for i in 0..1000 {
+		let x = Vector::<f64>::from_vec(vec!{ i as f64 * 0.01 });
+		let mean = compute_mean(&data, x.clone());
+		let std_deviation = compute_std_deviation(&data, x.clone());
+		println!("mean: {}", mean);
+		println!("std_deviation: {}", std_deviation);
+		println!("{}, {}", *x.x(), expected_improvement(mean, std_deviation, data[max_index].y).length());
+	}
+
+	/*for _ in n_0..n {
 		let max_sample = 0.; // TODO
 		let start = Vector::<f64>::new(dim); // TODO
 
@@ -131,21 +167,13 @@ fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize
 			let mean = compute_mean(&data, x.clone());
 			let std_deviation = compute_std_deviation(&data, x);
 			expected_improvement_gradient(mean, std_deviation, max_sample)
-		}, 1024);
+		}, 100);
 
 		data.push(Sample {
 			x: x.clone(),
 			y: f(x)
 		});
-	}
-
-	let mut max_index = 0;
-	for i in 0..data.len() {
-		println!("{} {}", data[i].x, data[i].y);
-		if data[i].y > data[max_index].y {
-			max_index = i;
-		}
-	}
+	}*/
 
 	data[max_index].x.clone()
 }
@@ -153,8 +181,8 @@ fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize
 fn main() {
 	let result = bayesian_optimization(| v | {
 		let x = v.x();
-		((x - 10.) * x).sin() - ((x - 10.) * (x - 10.)) + 10.
-	}, 1, 10, 50);
+		(x * x).sin() * x - x * x
+	}, 1, 10, 25);
 
 	/*let result = bfgs(Vector::<f64>::from_vec(vec!{10.}), | x | {
 		x.x() * x.x() + x.x() * 2. + x.x().cos() * 80.

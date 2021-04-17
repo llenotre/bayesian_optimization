@@ -13,7 +13,7 @@ fn line_search<A>(x: Vector::<f64>, direction: Vector::<f64>, gradient: A, max_s
 	-> f64 where A: Fn(Vector::<f64>) -> Vector::<f64> {
 	*gradient_descent(Vector::new(1), | a | {
 		gradient(x.clone() + a * direction.clone()) * direction.clone()
-	}, 0.001, 1024).x()
+	}, 0.001, 100).x()
 }
 
 pub fn compute_new_inverse_hessian(curr_mat: Matrix::<f64>, s: Vector::<f64>, y: Vector::<f64>)
