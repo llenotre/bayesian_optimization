@@ -1,10 +1,9 @@
-use std::f64::consts::PI;
-
 use leonhard::linear_algebra::*;
 
 use bfgs::bfgs;
 
 mod bfgs;
+mod normal;
 mod util;
 
 struct Sample {
@@ -12,12 +11,42 @@ struct Sample {
 	y: f64,
 }
 
-fn gaussian_kernel(a: Vector::<f64>, b: Vector::<f64>) -> f64 {
-	let alpha = 1.; // TODO
-	alpha * (-((a - b).length_squared())).exp()
+fn norm(v: Vector::<f64>) -> f64 {
+	v.length()
 }
 
-// TODO gaussian_kernel gradient
+fn norm_gradient(v: Vector::<f64>) -> Vector::<f64> {
+	let length = v.length();
+	let size = v.get_size();
+	let mut g = Vector::new(size);
+
+	for i in 0..size {
+		g[i] = v[i] / length;
+	}
+	g
+}
+
+fn distance(a: Vector::<f64>, b: Vector::<f64>) -> f64 {
+	norm(a - b)
+}
+
+// a is the variable, b is a constant
+fn distance_gradient(a: Vector::<f64>, b: Vector::<f64>) -> Vector::<f64> {
+	norm_gradient(a.clone() - b) * a
+}
+
+fn gaussian_kernel(a: Vector::<f64>, b: Vector::<f64>) -> f64 {
+	let alpha = 1.; // TODO
+	alpha * (-distance(a, b)).exp()
+}
+
+// a is the variable, b is a constant
+fn gaussian_kernel_gradient(a: Vector::<f64>, b: Vector::<f64>) -> Vector::<f64> {
+	let len = a.get_size();
+	let alpha = 1.; // TODO
+	let dist = distance(a.clone(), b.clone());
+	distance_gradient(a, b) * (2. * alpha * (-(dist * dist)).exp() * dist)
+}
 
 fn build_covariance_matrix<F0: Fn(usize) -> Vector::<f64>, F1: Fn(usize) -> Vector::<f64>>(y: F0,
 	height: usize, x: F1, width: usize) -> Matrix::<f64> {
@@ -34,20 +63,6 @@ fn build_covariance_matrix<F0: Fn(usize) -> Vector::<f64>, F1: Fn(usize) -> Vect
 	}
 
 	m
-}
-
-fn normal_density(x: f64, mean: f64, std_deviation: f64) -> f64 {
-	let a = (x - mean) / std_deviation;
-	let b = std_deviation * (2. * PI).sqrt();
-	(-0.5 * a * a).exp() / b
-}
-
-fn normal_cdf(x: f64, mean: f64, std_deviation: f64) -> f64 {
-	let integral_constant = -(PI / 2.).sqrt() * std_deviation;
-	let F_x = integral_constant * util::erf((mean - x) / 2_f64.sqrt() * std_deviation);
-	let F_minus_inf = integral_constant * 1.; // `1` is the limit of erf(x) for x -> +inf
-	let b = std_deviation * (2. * PI).sqrt();
-	(F_x - F_minus_inf) / b
 }
 
 fn data_y_to_vec(data: &Vec<Sample>) -> Vector::<f64> {
@@ -111,8 +126,8 @@ fn expected_improvement(mean: Vector::<f64>, std_deviation: Vector::<f64>, max_s
 	let mut v = Vector::<f64>::new(dim);
 	for i in 0..dim {
 		let delta = mean.get(i) - max_sample;
-		let density = normal_density(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
-		let cumulative_density = normal_cdf(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
+		let density = normal::pdf(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
+		let cumulative_density = normal::cdf(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
 		*v.get_mut(i) = util::maxf(delta, 0.) + std_deviation.get(i) * density - delta.abs() * cumulative_density;
 		//println!("max({}, 0) + {} * {} - |{}| * {} = {}", delta, std_deviation.get(i), density, delta, cumulative_density, *v.get(i));
 	}
