@@ -114,7 +114,7 @@ fn expected_improvement(mean: Vector::<f64>, std_deviation: Vector::<f64>, max_s
 		let density = normal_density(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
 		let cumulative_density = normal_cdf(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
 		*v.get_mut(i) = util::maxf(delta, 0.) + std_deviation.get(i) * density - delta.abs() * cumulative_density;
-		println!("max({}, 0) + {} * {} - |{}| * {} = {}", delta, std_deviation.get(i), density, delta, cumulative_density, *v.get(i));
+		//println!("max({}, 0) + {} * {} - |{}| * {} = {}", delta, std_deviation.get(i), density, delta, cumulative_density, *v.get(i));
 	}
 	v
 }
@@ -135,23 +135,23 @@ fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize
 	let mut max_index = 0;
 
 	for _ in 0..n_0 {
-		let x = util::rand_vector(dim, 100.);
+		let x = util::rand_vector(dim, 10.);
 		data.push(Sample {
 			x: x.clone(),
 			y: f(x)
 		});
-		//println!("{}, {}", data[data.len() - 1].x, data[data.len() - 1].y);
+		//println!("{}, {}", data[data.len() - 1].x.x(), data[data.len() - 1].y);
 		if data[data.len() - 1].y > data[max_index].y {
 			max_index = data.len() - 1;
 		}
 	}
 
-	for i in 0..1000 {
-		let x = Vector::<f64>::from_vec(vec!{ i as f64 * 0.01 });
+	for i in -100..100 {
+		let x = Vector::<f64>::from_vec(vec!{ i as f64 * 0.1 });
 		let mean = compute_mean(&data, x.clone());
 		let std_deviation = compute_std_deviation(&data, x.clone());
-		println!("mean: {}", mean);
-		println!("std_deviation: {}", std_deviation);
+		//println!("mean: {}", mean);
+		//println!("std_deviation: {}", std_deviation);
 		println!("{}, {}", *x.x(), expected_improvement(mean, std_deviation, data[max_index].y).length());
 	}
 
