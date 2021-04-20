@@ -21,7 +21,11 @@ fn norm_gradient(v: Vector::<f64>) -> Vector::<f64> {
 	let mut g = Vector::new(size);
 
 	for i in 0..size {
-		g[i] = v[i] / length;
+		if length >= 0.00001 {
+			g[i] = v[i] / length;
+		} else {
+			g[i] = 0.;
+		}
 	}
 	g
 }
@@ -37,7 +41,8 @@ fn distance_gradient(a: Vector::<f64>, b: Vector::<f64>) -> Vector::<f64> {
 
 fn gaussian_kernel(a: Vector::<f64>, b: Vector::<f64>) -> f64 {
 	let alpha = 1.; // TODO
-	alpha * (-distance(a, b)).exp()
+	let dist = distance(a, b);
+	alpha * (-(dist * dist)).exp()
 }
 
 // a is the variable, b is a constant
@@ -165,9 +170,9 @@ fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize
 		let x = Vector::<f64>::from_vec(vec!{ i as f64 * 0.1 });
 		let mean = compute_mean(&data, x.clone());
 		let std_deviation = compute_std_deviation(&data, x.clone());
-		//println!("mean: {}", mean);
-		//println!("std_deviation: {}", std_deviation);
-		println!("{}, {}", *x.x(), expected_improvement(mean, std_deviation, data[max_index].y).length());
+		//println!("{}, {}", *x.x(), expected_improvement(mean, std_deviation, data[max_index].y).length());
+		println!("{}, {}", *x.x(), expected_improvement_gradient(mean, std_deviation, data[max_index].y).length());
+		//println!("{}, {}", *x.x(), gaussian_kernel(x.clone(), Vector::new(1)));
 	}
 
 	/*for _ in n_0..n {
