@@ -129,21 +129,49 @@ fn expected_improvement(mean: Vector::<f64>, std_deviation: Vector::<f64>, max_s
 	-> Vector::<f64> {
 	let dim = mean.get_size();
 	let mut v = Vector::<f64>::new(dim);
+
 	for i in 0..dim {
-		let delta = mean.get(i) - max_sample;
-		let density = normal::pdf(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
-		let cumulative_density = normal::cdf(delta / std_deviation.get(i), *mean.get(i), *std_deviation.get(i));
-		*v.get_mut(i) = util::maxf(delta, 0.) + std_deviation.get(i) * density - delta.abs() * cumulative_density;
-		//println!("max({}, 0) + {} * {} - |{}| * {} = {}", delta, std_deviation.get(i), density, delta, cumulative_density, *v.get(i));
+		if std_deviation[i].abs() > 0.0001 {
+			let delta = mean.get(i) - max_sample;
+
+			let A = delta / std_deviation.get(i);
+
+			let density = normal::pdf(A, *mean.get(i), *std_deviation.get(i));
+			let cumulative_density = normal::cdf(A, *mean.get(i), *std_deviation.get(i));
+
+			*v.get_mut(i) = util::maxf(delta, 0.) + std_deviation.get(i) * density - delta.abs() * cumulative_density;
+			//println!("max({}, 0) + {} * {} - |{}| * {} = {}", delta, std_deviation.get(i), density, delta, cumulative_density, *v.get(i));
+		}
 	}
 	v
 }
 
 fn expected_improvement_gradient(mean: Vector::<f64>, std_deviation: Vector::<f64>,
-	max_sample: f64) -> Vector::<f64> {
+	std_deviation_gradient: Vector::<f64>, max_sample: f64) -> Vector::<f64> {
 	let dim = mean.get_size();
-	// TODO
-	Vector::new(dim)
+	let mut v = Vector::<f64>::new(dim);
+
+	for i in 0..dim {
+		if std_deviation[i].abs() > 0.0001 {
+			let delta = mean.get(i) - max_sample; // Constant: derivative is 0
+
+			let A = delta / std_deviation.get(i);
+			let A_gradient = (std_deviation_gradient.get(i) * A)
+				/ (std_deviation.get(i) * std_deviation.get(i));
+
+			let density = normal::pdf(A, *mean.get(i), *std_deviation.get(i));
+			let cumulative_density = normal::cdf(A, *mean.get(i), *std_deviation.get(i));
+			let density_derivative = A_gradient * 0.; // TODO
+			// By definition, the derivative of the CDF is the PDF
+			let cumulative_density_derivative = A_gradient * density;
+
+			let a = density * std_deviation_gradient.get(i) + density_derivative * *std_deviation.get(i);
+			let b = delta.abs() * cumulative_density_derivative;
+
+			*v.get_mut(i) = a - b;
+		}
+	}
+	v
 }
 
 fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize, n: usize)
@@ -166,18 +194,20 @@ fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize
 		}
 	}
 
-	/*for i in -100..100 {
-		let x = Vector::<f64>::from_vec(vec!{ i as f64 * 0.1 });
-		let mean = compute_mean(&data, x.clone());
-		let std_deviation = compute_std_deviation(&data, x.clone());
-		//println!("{}, {}", *x.x(), expected_improvement(mean, std_deviation, data[max_index].y).length());
-		println!("{}, {}", *x.x(), expected_improvement_gradient(mean, std_deviation, data[max_index].y).length());
-		//println!("{}, {}", *x.x(), gaussian_kernel(x.clone(), Vector::new(1)));
-	}*/
-
 	for _ in n_0..n {
 		let max_sample = 0.; // TODO
 		let start = Vector::<f64>::new(dim); // TODO
+
+		// TODO rm
+		for i in -100..100 {
+			let x = Vector::<f64>::from_vec(vec!{ i as f64 * 0.1 });
+			let mean = compute_mean(&data, x.clone());
+			let std_deviation = compute_std_deviation(&data, x.clone());
+			let std_deviation_gradient = Vector::<f64>::new(dim); // TODO
+			println!("{}, {}", *x.x(), expected_improvement(mean, std_deviation, data[max_index].y).length());
+			//println!("{}, {}", *x.x(), expected_improvement_gradient(mean, std_deviation, std_deviation_gradient, data[max_index].y).length());
+			//println!("{}, {}", *x.x(), gaussian_kernel(x.clone(), Vector::new(1)));
+		}
 
 		let x = bfgs(start, | x | {
 			let mean = compute_mean(&data, x.clone());
@@ -186,8 +216,10 @@ fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize
 		}, | x | {
 			let mean = compute_mean(&data, x.clone());
 			let std_deviation = compute_std_deviation(&data, x);
-			expected_improvement_gradient(mean, std_deviation, max_sample)
+			let std_deviation_gradient = Vector::<f64>::new(dim); // TODO
+			expected_improvement_gradient(mean, std_deviation, std_deviation_gradient, max_sample)
 		}, 100);
+		println!("next: {}", x);
 
 		data.push(Sample {
 			x: x.clone(),
@@ -199,16 +231,16 @@ fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize
 }
 
 fn main() {
-	/*let result = bayesian_optimization(| v | {
+	let result = bayesian_optimization(| v | {
 		let x = v.x();
 		(x * x).sin() * x - x * x
-	}, 1, 10, 25);*/
+	}, 1, 10, 25);
 
-	let result = bfgs(Vector::<f64>::from_vec(vec!{20.}), | x | {
+	/*let result = bfgs(Vector::<f64>::from_vec(vec!{20.}), | x | {
 		x.x() * x.x() + x.x() * 2. + x.x().cos() * 80.
 	}, | x | {
 		x.clone() * 2. + 2. - 80. * x.x().sin()
-	}, 1024);
+	}, 1024);*/
 
 	println!("Result: {}", result);
 }
