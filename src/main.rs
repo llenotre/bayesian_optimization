@@ -70,6 +70,25 @@ fn build_covariance_matrix<F0: Fn(usize) -> Vector::<f64>, F1: Fn(usize) -> Vect
 	m
 }
 
+fn build_covariance_matrix_derivative<F0, F1>(y: F0, height: usize, x: F1, width: usize)
+	-> Matrix::<f64>
+		where F0: Fn(usize) -> Vector::<f64>,
+			F1: Fn(usize) -> Vector::<f64> {
+	let mut m = Matrix::<f64>::new(height, width);
+
+	for i in 0..height {
+		for j in 0..width {
+			let val = gaussian_kernel_gradient(y(i), x(j));
+			*m.get_mut(i, j) = val;
+			if j < height && i < width {
+				*m.get_mut(j, i) = val;
+			}
+		}
+	}
+
+	m
+}
+
 fn data_y_to_vec(data: &Vec<Sample>) -> Vector::<f64> {
 	let len = data.len();
 	let mut v = Vector::new(len);
@@ -95,12 +114,8 @@ fn compute_mean(data: &Vec<Sample>, x: Vector::<f64>) -> Vector::<f64> {
 	a * (b * c)
 }
 
-fn compute_std_deviation(data: &Vec<Sample>, x: Vector::<f64>) -> Vector::<f64> {
-	let a = build_covariance_matrix(| _ | {
-		x.clone()
-	}, 1, | _ | {
-		x.clone()
-	}, 1);
+fn compute_std_deviation(data: &Vec<Sample>, x: Vector::<f64>) -> f64 {
+	let a = gaussian_kernel(x.clone(), x.clone());
 	let b = build_covariance_matrix(| _ | {
 		x.clone()
 	}, 1, | i | {
@@ -117,12 +132,29 @@ fn compute_std_deviation(data: &Vec<Sample>, x: Vector::<f64>) -> Vector::<f64> 
 		x.clone()
 	}, 1);
 
-	let mut result = (a.clone() - (b.clone() * (c.clone() * d.clone()))).to_vector();
-	result.for_each(| v, _ | {
-		v.sqrt()
-	});
-	//println!("s: sqrt({} - ({} * ({} * {}))) = {}", a, b, c, d, result);
-	result
+	a - (b.clone() * (c.clone() * d.clone())).get(0, 0).sqrt()
+}
+
+fn compute_std_deviation_gradient(data: &Vec<Sample>, x: Vector::<f64>) -> Vector::<f64> {
+	let a = build_covariance_matrix_derivative(| _ | {
+		x.clone()
+	}, 1, | i | {
+		data[i].x.clone()
+	}, data.len());
+	let b = build_covariance_matrix_derivative(| i | {
+		data[i].x.clone()
+	}, data.len(), | i | {
+		data[i].x.clone()
+	}, data.len()).get_inverse();
+	let c = build_covariance_matrix_derivative(| i | {
+		data[i].x.clone()
+	}, data.len(), | _ | {
+		x.clone()
+	}, 1);
+
+	// TODO
+	let r = (a.clone() * (b.clone() * c.clone())).get(0, 0);
+	r / (2. * compute_std_deviation(data, x))
 }
 
 fn expected_improvement(mean: Vector::<f64>, std_deviation: Vector::<f64>, max_sample: f64)
