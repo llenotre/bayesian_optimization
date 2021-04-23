@@ -9,11 +9,17 @@ fn gradient_descent<A>(mut x: Vector::<f64>, gradient: A, step_size: f64, max_st
 	x
 }
 
-fn line_search<A>(x: Vector::<f64>, direction: Vector::<f64>, gradient: A, max_steps: usize)
-	-> f64 where A: Fn(Vector::<f64>) -> Vector::<f64> {
-	*gradient_descent(Vector::new(1), | a | {
-		gradient(x.clone() + a * direction.clone()) * direction.clone()
-	}, 0.001, 100).x()
+fn line_search<A>(x: Vector::<f64>, direction: Vector::<f64>, func: A, control: f64, begin: f64,
+	step_size: f64, max_steps: usize) -> f64 where A: Fn(Vector::<f64>) -> f64 {
+	let local_curvature = (-direction.clone()).dot(&x);
+	let t = -control * local_curvature;
+	let mut j = 0;
+	let mut a = begin;
+	while j < max_steps && func(x.clone()) - func(x.clone() + direction.clone() * a) < a * t {
+		a = step_size * a;
+		j += 1;
+	}
+	a
 }
 
 pub fn compute_new_inverse_hessian(curr_mat: Matrix::<f64>, s: Vector::<f64>, y: Vector::<f64>)
@@ -40,13 +46,13 @@ pub fn bfgs<A, B>(start: Vector::<f64>, func: A, gradient: B, max_steps: usize) 
 	let mut inverse_hessian_matrix = Matrix::identity(start.get_size());
 
 	for _ in 0..max_steps {
-		//println!("x: {}", x.clone());
+		println!("x: {}", x.clone());
 		let grad = gradient(x.clone());
 		let direction = inverse_hessian_matrix.clone() * -grad.clone();
-		//println!("inverse_hessian_matrix: {}", inverse_hessian_matrix.clone());
-		//println!("direction: {}", direction.clone());
-		let alpha = line_search(x.clone(), direction.clone(), gradient, 1024);
-		//println!("alpha: {}", alpha);
+		println!("inverse_hessian_matrix: {}", inverse_hessian_matrix.clone());
+		println!("direction: {}", direction.clone());
+		let alpha = line_search(x.clone(), direction.clone(), func, 1., 100., 0.1, 1024);
+		println!("alpha: {}", alpha);
 		let s = direction * alpha;
 		let x_next = x.clone() + s.clone();
 		let gradient_difference = gradient(x_next.clone()) - grad;
@@ -54,11 +60,11 @@ pub fn bfgs<A, B>(start: Vector::<f64>, func: A, gradient: B, max_steps: usize) 
 			break;
 		}
 		x = x_next;
-		//println!("gradient_difference: {}", gradient_difference);
+		println!("gradient_difference: {}", gradient_difference);
 		inverse_hessian_matrix = compute_new_inverse_hessian(inverse_hessian_matrix, s,
 			gradient_difference);
-		//println!("new inverse_hessian_matrix: {}", inverse_hessian_matrix.clone());
-		//println!("------------------------------------------------------------------------");
+		println!("new inverse_hessian_matrix: {}", inverse_hessian_matrix.clone());
+		println!("------------------------------------------------------------------------");
 	}
 
 	x

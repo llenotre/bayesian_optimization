@@ -166,16 +166,16 @@ fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize
 		}
 	}
 
-	for i in -100..100 {
+	/*for i in -100..100 {
 		let x = Vector::<f64>::from_vec(vec!{ i as f64 * 0.1 });
 		let mean = compute_mean(&data, x.clone());
 		let std_deviation = compute_std_deviation(&data, x.clone());
 		//println!("{}, {}", *x.x(), expected_improvement(mean, std_deviation, data[max_index].y).length());
 		println!("{}, {}", *x.x(), expected_improvement_gradient(mean, std_deviation, data[max_index].y).length());
 		//println!("{}, {}", *x.x(), gaussian_kernel(x.clone(), Vector::new(1)));
-	}
+	}*/
 
-	/*for _ in n_0..n {
+	for _ in n_0..n {
 		let max_sample = 0.; // TODO
 		let start = Vector::<f64>::new(dim); // TODO
 
@@ -193,22 +193,22 @@ fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize
 			x: x.clone(),
 			y: f(x)
 		});
-	}*/
+	}
 
 	data[max_index].x.clone()
 }
 
 fn main() {
-	let result = bayesian_optimization(| v | {
+	/*let result = bayesian_optimization(| v | {
 		let x = v.x();
 		(x * x).sin() * x - x * x
-	}, 1, 10, 25);
+	}, 1, 10, 25);*/
 
-	/*let result = bfgs(Vector::<f64>::from_vec(vec!{10.}), | x | {
+	let result = bfgs(Vector::<f64>::from_vec(vec!{20.}), | x | {
 		x.x() * x.x() + x.x() * 2. + x.x().cos() * 80.
 	}, | x | {
 		x.clone() * 2. + 2. - 80. * x.x().sin()
-	}, 1024);*/
+	}, 1024);
 
 	println!("Result: {}", result);
 }
