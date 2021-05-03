@@ -90,3 +90,48 @@ pub fn bfgs<A>(start: Vector::<f64>, func: A, max_steps: usize) -> Vector::<f64>
 
 	x
 }
+
+/*
+pub fn bfgs<A>(start: Vector::<f64>, func: A, max_steps: usize) -> Vector::<f64>
+	where A: Fn(Vector::<f64>) -> f64 + Copy {
+
+	let gradient = | x | {
+		approximate_gradient(func, x)
+	};
+
+	let dim = start.get_size();
+	let mut x = start;
+	let mut pos_diff = Vector::<f64>::new(dim);
+	let mut grad_diff = Vector::<f64>::new(dim);
+
+	for _ in 0..max_steps {
+		let grad = gradient(x.clone());
+		let rho = 1. / grad_diff.dot(&pos_diff);
+
+		let mut q = grad.clone();
+		let mut alpha = 0.;
+		for _ in 0..100 { // TODO
+			alpha = rho * pos_diff.dot(&q);
+			q -= grad_diff.clone() * alpha;
+		}
+
+		let gamma = pos_diff.dot(&grad_diff) / grad_diff.dot(&grad_diff);
+		let mut inverse_hessian = Matrix::<f64>::new(dim, dim) * gamma;
+		let mut z = inverse_hessian * q;
+
+		for _ in 0..100 { // TODO
+			let beta = rho * grad_diff.dot(&z);
+			z += pos_diff.clone() * (alpha - beta);
+		}
+
+		let new_pos = x.clone() + z;
+		let new_grad = gradient(new_pos.clone());
+		pos_diff = new_pos.clone() - x;
+		grad_diff = new_grad - grad.clone();
+
+		x = new_pos;
+	}
+
+	x
+}
+*/
