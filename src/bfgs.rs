@@ -1,5 +1,24 @@
 use leonhard::linear_algebra::*;
 
+fn approximate_gradient<A>(func: A, x: Vector<f64>) -> Vector<f64>
+	where A: Fn(Vector::<f64>) -> f64 + Copy {
+	let dim = x.get_size();
+	let step_size = 0.1; // TODO
+	let mut v = Vector::<f64>::new(dim);
+
+	for i in 0..dim {
+		let mut direction = Vector::<f64>::new(dim);
+		direction[i] = step_size;
+
+		v[i] = func(x.clone() + direction.clone()) - func(x.clone());
+		println!("diff: {} - {}", func(x.clone() + direction), func(x.clone()));
+	}
+
+	println!("Derivative at {}:\n{}", x, v);
+
+	v
+}
+
 fn gradient_descent<A>(mut x: Vector::<f64>, gradient: A, step_size: f64, max_steps: usize)
 	-> Vector::<f64> where A: Fn(Vector::<f64>) -> Vector::<f64> {
 	for _ in 0..max_steps {
@@ -38,12 +57,14 @@ pub fn compute_new_inverse_hessian(curr_mat: Matrix::<f64>, s: Vector::<f64>, y:
 	curr_mat + a - b
 }
 
-pub fn bfgs<A, B>(start: Vector::<f64>, func: A, gradient: B, max_steps: usize) -> Vector::<f64>
-	where
-		A: Fn(Vector::<f64>) -> f64 + Copy,
-		B: Fn(Vector::<f64>) -> Vector::<f64> + Copy {
+pub fn bfgs<A>(start: Vector::<f64>, func: A, max_steps: usize) -> Vector::<f64>
+	where A: Fn(Vector::<f64>) -> f64 + Copy {
 	let mut x = start.clone();
 	let mut inverse_hessian_matrix = Matrix::identity(start.get_size());
+
+	let gradient = | x | {
+		approximate_gradient(func, x)
+	};
 
 	for _ in 0..max_steps {
 		println!("x: {}", x.clone());
@@ -56,11 +77,11 @@ pub fn bfgs<A, B>(start: Vector::<f64>, func: A, gradient: B, max_steps: usize) 
 		let s = direction * alpha;
 		let x_next = x.clone() + s.clone();
 		let gradient_difference = gradient(x_next.clone()) - grad;
-		if gradient_difference.length_squared() < 0.0001 {
-			break;
-		}
+		//if gradient_difference.length() < 0.000001 {
+			//break;
+		//}
 		x = x_next;
-		println!("gradient_difference: {}", gradient_difference);
+		//println!("gradient_difference: {}", gradient_difference);
 		inverse_hessian_matrix = compute_new_inverse_hessian(inverse_hessian_matrix, s,
 			gradient_difference);
 		println!("new inverse_hessian_matrix: {}", inverse_hessian_matrix.clone());

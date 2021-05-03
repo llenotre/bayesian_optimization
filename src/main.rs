@@ -70,25 +70,6 @@ fn build_covariance_matrix<F0: Fn(usize) -> Vector::<f64>, F1: Fn(usize) -> Vect
 	m
 }
 
-fn build_covariance_matrix_derivative<F0, F1>(y: F0, height: usize, x: F1, width: usize)
-	-> Matrix::<f64>
-		where F0: Fn(usize) -> Vector::<f64>,
-			F1: Fn(usize) -> Vector::<f64> {
-	let mut m = Matrix::<f64>::new(height, width);
-
-	for i in 0..height {
-		for j in 0..width {
-			let val = gaussian_kernel_gradient(y(i), x(j));
-			*m.get_mut(i, j) = val;
-			if j < height && i < width {
-				*m.get_mut(j, i) = val;
-			}
-		}
-	}
-
-	m
-}
-
 fn data_y_to_vec(data: &Vec<Sample>) -> Vector::<f64> {
 	let len = data.len();
 	let mut v = Vector::new(len);
@@ -135,72 +116,22 @@ fn compute_std_deviation(data: &Vec<Sample>, x: Vector::<f64>) -> f64 {
 	a - (b.clone() * (c.clone() * d.clone())).get(0, 0).sqrt()
 }
 
-fn compute_std_deviation_gradient(data: &Vec<Sample>, x: Vector::<f64>) -> Vector::<f64> {
-	let a = build_covariance_matrix_derivative(| _ | {
-		x.clone()
-	}, 1, | i | {
-		data[i].x.clone()
-	}, data.len());
-	let b = build_covariance_matrix_derivative(| i | {
-		data[i].x.clone()
-	}, data.len(), | i | {
-		data[i].x.clone()
-	}, data.len()).get_inverse();
-	let c = build_covariance_matrix_derivative(| i | {
-		data[i].x.clone()
-	}, data.len(), | _ | {
-		x.clone()
-	}, 1);
-
-	// TODO
-	let r = (a.clone() * (b.clone() * c.clone())).get(0, 0);
-	r / (2. * compute_std_deviation(data, x))
-}
-
-fn expected_improvement(mean: Vector::<f64>, std_deviation: Vector::<f64>, max_sample: f64)
+fn expected_improvement(mean: Vector::<f64>, std_deviation: f64, max_sample: f64)
 	-> Vector::<f64> {
 	let dim = mean.get_size();
 	let mut v = Vector::<f64>::new(dim);
 
 	for i in 0..dim {
-		if std_deviation[i].abs() > 0.0001 {
+		if std_deviation.abs() > 0.0001 {
 			let delta = mean.get(i) - max_sample;
 
-			let A = delta / std_deviation.get(i);
+			let A = delta / std_deviation;
 
-			let density = normal::pdf(A, *mean.get(i), *std_deviation.get(i));
-			let cumulative_density = normal::cdf(A, *mean.get(i), *std_deviation.get(i));
+			let density = normal::pdf(A, *mean.get(i), std_deviation);
+			let cumulative_density = normal::cdf(A, *mean.get(i), std_deviation);
 
-			*v.get_mut(i) = util::maxf(delta, 0.) + std_deviation.get(i) * density - delta.abs() * cumulative_density;
-			//println!("max({}, 0) + {} * {} - |{}| * {} = {}", delta, std_deviation.get(i), density, delta, cumulative_density, *v.get(i));
-		}
-	}
-	v
-}
-
-fn expected_improvement_gradient(mean: Vector::<f64>, std_deviation: Vector::<f64>,
-	std_deviation_gradient: Vector::<f64>, max_sample: f64) -> Vector::<f64> {
-	let dim = mean.get_size();
-	let mut v = Vector::<f64>::new(dim);
-
-	for i in 0..dim {
-		if std_deviation[i].abs() > 0.0001 {
-			let delta = mean.get(i) - max_sample; // Constant: derivative is 0
-
-			let A = delta / std_deviation.get(i);
-			let A_gradient = (std_deviation_gradient.get(i) * A)
-				/ (std_deviation.get(i) * std_deviation.get(i));
-
-			let density = normal::pdf(A, *mean.get(i), *std_deviation.get(i));
-			let cumulative_density = normal::cdf(A, *mean.get(i), *std_deviation.get(i));
-			let density_derivative = A_gradient * 0.; // TODO
-			// By definition, the derivative of the CDF is the PDF
-			let cumulative_density_derivative = A_gradient * density;
-
-			let a = density * std_deviation_gradient.get(i) + density_derivative * *std_deviation.get(i);
-			let b = delta.abs() * cumulative_density_derivative;
-
-			*v.get_mut(i) = a - b;
+			*v.get_mut(i) = util::maxf(delta, 0.) + std_deviation * density - delta.abs() * cumulative_density;
+			//println!("max({}, 0) + {} * {} - |{}| * {} = {}", delta, std_deviation, density, delta, cumulative_density, *v.get(i));
 		}
 	}
 	v
@@ -220,38 +151,31 @@ fn bayesian_optimization<F: Fn(Vector<f64>) -> f64>(f: F, dim: usize, n_0: usize
 			x: x.clone(),
 			y: f(x)
 		});
-		//println!("{}, {}", data[data.len() - 1].x.x(), data[data.len() - 1].y);
+		println!("{}, {}", data[data.len() - 1].x.x(), data[data.len() - 1].y);
 		if data[data.len() - 1].y > data[max_index].y {
 			max_index = data.len() - 1;
 		}
 	}
 
 	for _ in n_0..n {
-		let max_sample = 0.; // TODO
-		let start = Vector::<f64>::new(dim); // TODO
+		let max_sample = data[max_index].y;
 
 		// TODO rm
 		for i in -100..100 {
 			let x = Vector::<f64>::from_vec(vec!{ i as f64 * 0.1 });
 			let mean = compute_mean(&data, x.clone());
 			let std_deviation = compute_std_deviation(&data, x.clone());
-			let std_deviation_gradient = Vector::<f64>::new(dim); // TODO
-			println!("{}, {}", *x.x(), expected_improvement(mean, std_deviation, data[max_index].y).length());
-			//println!("{}, {}", *x.x(), expected_improvement_gradient(mean, std_deviation, std_deviation_gradient, data[max_index].y).length());
+			//println!("{}, {}", *x.x(), expected_improvement(mean, std_deviation, max_sample).length());
 			//println!("{}, {}", *x.x(), gaussian_kernel(x.clone(), Vector::new(1)));
 		}
 
+		let start = Vector::<f64>::new(dim); // TODO Init at random value?
 		let x = bfgs(start, | x | {
 			let mean = compute_mean(&data, x.clone());
 			let std_deviation = compute_std_deviation(&data, x);
-			expected_improvement(mean, std_deviation, max_sample).length()
-		}, | x | {
-			let mean = compute_mean(&data, x.clone());
-			let std_deviation = compute_std_deviation(&data, x);
-			let std_deviation_gradient = Vector::<f64>::new(dim); // TODO
-			expected_improvement_gradient(mean, std_deviation, std_deviation_gradient, max_sample)
+			-expected_improvement(mean, std_deviation, max_sample).length()
 		}, 100);
-		println!("next: {}", x);
+		//println!("next: {}", x);
 
 		data.push(Sample {
 			x: x.clone(),
