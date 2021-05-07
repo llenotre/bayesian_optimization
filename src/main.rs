@@ -11,46 +11,10 @@ struct Sample {
 	y: f64,
 }
 
-fn norm(v: Vector::<f64>) -> f64 {
-	v.length()
-}
-
-fn norm_gradient(v: Vector::<f64>) -> Vector::<f64> {
-	let length = v.length();
-	let size = v.get_size();
-	let mut g = Vector::new(size);
-
-	for i in 0..size {
-		if length >= 0.00001 {
-			g[i] = v[i] / length;
-		} else {
-			g[i] = 0.;
-		}
-	}
-	g
-}
-
-fn distance(a: Vector::<f64>, b: Vector::<f64>) -> f64 {
-	norm(a - b)
-}
-
-// a is the variable, b is a constant
-fn distance_gradient(a: Vector::<f64>, b: Vector::<f64>) -> Vector::<f64> {
-	norm_gradient(a.clone() - b) * a
-}
-
 fn gaussian_kernel(a: Vector::<f64>, b: Vector::<f64>) -> f64 {
 	let alpha = 1.; // TODO
-	let dist = distance(a, b);
+	let dist = (a - b).length();
 	alpha * (-(dist * dist)).exp()
-}
-
-// a is the variable, b is a constant
-fn gaussian_kernel_gradient(a: Vector::<f64>, b: Vector::<f64>) -> Vector::<f64> {
-	let len = a.get_size();
-	let alpha = 1.; // TODO
-	let dist = distance(a.clone(), b.clone());
-	distance_gradient(a, b) * (2. * alpha * (-(dist * dist)).exp() * dist)
 }
 
 fn build_covariance_matrix<F0: Fn(usize) -> Vector::<f64>, F1: Fn(usize) -> Vector::<f64>>(y: F0,
@@ -85,28 +49,34 @@ fn compute_mean(data: &Vec<Sample>, x: Vector::<f64>) -> Vector::<f64> {
 	}, 1, | i | {
 		data[i].x.clone()
 	}, data.len());
+
 	let b = build_covariance_matrix(| i | {
 		data[i].x.clone()
 	}, data.len(), | i | {
 		data[i].x.clone()
 	}, data.len()).get_inverse();
+
 	let c = data_y_to_vec(data);
+
 	//println!("m: {} * ({} * {}) = {}", a.clone(), b.clone(), c.clone(), a.clone() * (b.clone() * c.clone()));
 	a * (b * c)
 }
 
 fn compute_std_deviation(data: &Vec<Sample>, x: Vector::<f64>) -> f64 {
 	let a = gaussian_kernel(x.clone(), x.clone());
+
 	let b = build_covariance_matrix(| _ | {
 		x.clone()
 	}, 1, | i | {
 		data[i].x.clone()
 	}, data.len());
+
 	let c = build_covariance_matrix(| i | {
 		data[i].x.clone()
 	}, data.len(), | i | {
 		data[i].x.clone()
 	}, data.len()).get_inverse();
+
 	let d = build_covariance_matrix(| i | {
 		data[i].x.clone()
 	}, data.len(), | _ | {
